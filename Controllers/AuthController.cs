@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using asp_backend.Data;
 
 namespace asp_backend.Controllers;
 
@@ -6,16 +8,28 @@ namespace asp_backend.Controllers;
 [Route("auth")]
 public class AuthController : ControllerBase
 {
-    [HttpPost("login")]
-    public IActionResult Login([FromBody] LoginRequest request)
+    private readonly AppDbContext _db;
+
+    public AuthController(AppDbContext db)
     {
-        return Ok(new { message = "login ok", email = request.Email });
+        _db = db;
     }
 
-    [HttpPost("refresh")]
-    public IActionResult Refresh()
+    [HttpPost("login")]
+    public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
-        return Ok(new { message = "refresh ok" });
+        var user = await _db.Users
+            .FirstOrDefaultAsync(u => u.Email == request.Email);
+
+        if (user == null)
+            return Unauthorized(new { message = "Credenciales inválidas" });
+
+        var validPassword = BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash);
+
+        if (!validPassword)
+            return Unauthorized(new { message = "Credenciales inválidas" });
+
+        return Ok(new { message = "login ok", userId = user.Id, email = user.Email });
     }
 }
 

@@ -14,7 +14,14 @@ public class AuthController : ControllerBase
     {
         _db = db;
     }
-
+    
+    /// <summary>
+    ///Authenticate a user and return their information
+    /// </summary>
+    /// <remarks>
+    /// Validate the email and password against the database.
+    /// Returns 401 if the credentials are invalid.
+    /// </remarks>
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
@@ -22,12 +29,12 @@ public class AuthController : ControllerBase
             .FirstOrDefaultAsync(u => u.Email == request.Email);
 
         if (user == null)
-            return Unauthorized(new { message = "Credenciales inválidas" });
+            return Unauthorized(new { message = "Invalid credentials" });
 
         var validPassword = BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash);
 
         if (!validPassword)
-            return Unauthorized(new { message = "Credenciales inválidas" });
+            return Unauthorized(new { message = "Invalid credentials"  });
 
         return Ok(new { message = "login ok", userId = user.Id, email = user.Email });
     }

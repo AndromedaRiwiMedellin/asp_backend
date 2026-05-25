@@ -21,7 +21,7 @@ builder.Services.AddSwaggerGen(options =>
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// CORS agregado for allowing requests from the frontend application
+//  CORS agregado
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
@@ -41,7 +41,7 @@ app.UseSwaggerUI(options =>
     options.DisplayRequestDuration();
 });
 
-app.UseCors("Frontend"); 
+app.UseCors("Frontend"); //  antes de MapControllers
 app.UseAuthorization();
 app.MapControllers();
 

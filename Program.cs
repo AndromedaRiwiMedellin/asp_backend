@@ -13,7 +13,6 @@ builder.Services.AddSwaggerGen(options =>
         Version = "v1",
         Description = "Backend for the Andromeda event and ticketing management system."
     });
-
     var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
     options.IncludeXmlComments(xmlPath);
@@ -21,6 +20,17 @@ builder.Services.AddSwaggerGen(options =>
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// ✅ CORS agregado
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("Frontend", policy =>
+    {
+        policy.WithOrigins("http://localhost:5173")
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
 
 var app = builder.Build();
 
@@ -31,6 +41,7 @@ app.UseSwaggerUI(options =>
     options.DisplayRequestDuration();
 });
 
+app.UseCors("Frontend"); // ✅ antes de MapControllers
 app.UseAuthorization();
 app.MapControllers();
 

@@ -32,6 +32,8 @@ public class TicketsController : ControllerBase
             {
                 Id = Guid.NewGuid(),
                 Email = request.Email,
+                FullName = request.FullName,
+                Phone = request.Phone,
                 CreatedAt = DateTime.Now
             };
             _db.Users.Add(user);
@@ -86,6 +88,8 @@ public class TicketsController : ControllerBase
 public class PosPurchaseRequest
 {
     public string Email { get; set; } = string.Empty;
+    public string? FullName { get; set; }
+    public string? Phone { get; set; }
     public Guid EventId { get; set; }
     public long AreaId { get; set; }
     public List<string> Seats { get; set; } = new();

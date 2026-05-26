@@ -1,7 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using asp_backend.models;
 
-namespace asp_backend.Models;
+namespace asp_backend.models;
 
 public partial class User
 {

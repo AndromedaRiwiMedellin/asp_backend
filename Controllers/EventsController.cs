@@ -1,7 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using asp_backend.Data;
-using asp_backend.Models;
+using asp_backend.models;
+
 
 namespace asp_backend.Controllers;
 
@@ -45,7 +46,7 @@ public class EventsController : ControllerBase
     [HttpGet("{id}")]
     [ProducesResponseType(typeof(EventDetailsResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetById(int id)
+    public async Task<IActionResult> GetById(Guid id)
     {
         var ev = await _db.Events
             .FirstOrDefaultAsync(e => e.Id == id);

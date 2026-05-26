@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using asp_backend.Data;
 using asp_backend.models;
-using asp_backend.Models;
 
 namespace asp_backend.Controllers;
 
@@ -87,7 +86,7 @@ public class AuthController : ControllerBase
             Email = request.Email.ToLower(),
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
             FullName = request.FullName,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.Now
         };
 
         _db.Users.Add(user);

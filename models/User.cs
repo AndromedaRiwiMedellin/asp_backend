@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using asp_backend.Models;
+using asp_backend.models;
 
 namespace asp_backend.models;
 

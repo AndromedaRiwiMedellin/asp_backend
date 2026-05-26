@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using asp_backend.Data;
 using asp_backend.models;
-using asp_backend.Models;
+
 
 namespace asp_backend.Controllers;
 

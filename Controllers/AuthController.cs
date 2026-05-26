@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using asp_backend.Data;
+using asp_backend.models;
 using asp_backend.Models;
 
 namespace asp_backend.Controllers;
@@ -106,7 +107,7 @@ public class LoginRequest
 }
 
 /// <summary>Login response payload.</summary>
-public record LoginResponse(int UserId, string Email, string Message);
+public record LoginResponse(Guid UserId, string Email, string Message);
 
 /// <summary>Request payload for registration.</summary>
 public class RegisterRequest
@@ -120,4 +121,4 @@ public class RegisterRequest
 }
 
 /// <summary>Registration response payload.</summary>
-public record RegisterResponse(int UserId, string Email, string Message);
+public record RegisterResponse(Guid UserId, string Email, string Message);

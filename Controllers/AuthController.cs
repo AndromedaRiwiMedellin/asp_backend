@@ -38,11 +38,11 @@ public class AuthController : ControllerBase
             .FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower());
 
         if (user == null)
-            return Unauthorized(new { message = "Invalid credentials" });
+            return Unauthorized(new { message = "Invalid credentials." });
 
         var validPassword = BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash);
         if (!validPassword)
-            return Unauthorized(new { message = "Invalid credentials" });
+            return Unauthorized(new { message = "Invalid credentials." });
 
         return Ok(new LoginResponse(user.Id, user.Email, "login ok"));
     }
@@ -50,14 +50,6 @@ public class AuthController : ControllerBase
     /// <summary>
     /// Registers a new user account.
     /// </summary>
-    /// <remarks>
-    /// Creates a new user with email and password. Email must be unique (case-insensitive)
-    /// and password must be at least 8 characters.
-    /// </remarks>
-    /// <param name="request">Registration data.</param>
-    /// <response code="201">User created successfully.</response>
-    /// <response code="409">Email is already in use.</response>
-    /// <response code="400">Validation failed.</response>
     [HttpPost("register")]
     [ProducesResponseType(typeof(RegisterResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -67,14 +59,17 @@ public class AuthController : ControllerBase
         if (request == null)
             return BadRequest(new { message = "Request body is required." });
 
+        if (string.IsNullOrWhiteSpace(request.FullName))
+            return BadRequest(new { message = "Full name is required." });
+
         if (string.IsNullOrWhiteSpace(request.Email))
             return BadRequest(new { message = "Email is required." });
 
         if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 8)
             return BadRequest(new { message = "Password must be at least 8 characters." });
 
-        if (string.IsNullOrWhiteSpace(request.FullName))
-            return BadRequest(new { message = "Full name is required." });
+        if (request.Password != request.ConfirmPassword)
+            return BadRequest(new { message = "Passwords do not match." });
 
         var emailExists = await _db.Users
             .AnyAsync(u => u.Email.ToLower() == request.Email.ToLower());
@@ -93,7 +88,8 @@ public class AuthController : ControllerBase
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
 
-        return CreatedAtAction(nameof(Register), new RegisterResponse(user.Id, user.Email, "Account created successfully."));
+        return CreatedAtAction(nameof(Register),
+            new RegisterResponse(user.Id, user.Email, "Account created successfully."));
     }
 }
 
@@ -116,6 +112,8 @@ public class RegisterRequest
     public string Email { get; init; } = string.Empty;
     /// <summary>Password (minimum 8 characters).</summary>
     public string Password { get; init; } = string.Empty;
+    /// <summary>Confirm password.</summary>
+    public string ConfirmPassword { get; init; } = string.Empty;
     /// <summary>Full name of the user.</summary>
     public string FullName { get; init; } = string.Empty;
 }

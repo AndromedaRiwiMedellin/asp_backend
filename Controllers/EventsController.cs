@@ -45,7 +45,7 @@ public class EventsController : ControllerBase
     [HttpGet("{id}")]
     [ProducesResponseType(typeof(EventDetailsResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetById(int id)
+    public async Task<IActionResult> GetById(Guid id)
     {
         var ev = await _db.Events
             .FirstOrDefaultAsync(e => e.Id == id);

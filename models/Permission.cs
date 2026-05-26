@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace asp_backend.Models;
+namespace asp_backend.models;
 
-public partial class Role
+public partial class Permission
 {
     public int Id { get; set; }
 

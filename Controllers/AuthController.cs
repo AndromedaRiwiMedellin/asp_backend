@@ -106,7 +106,7 @@ public class LoginRequest
 }
 
 /// <summary>Login response payload.</summary>
-public record LoginResponse(int UserId, string Email, string Message);
+public record LoginResponse(Guid UserId, string Email, string Message);
 
 /// <summary>Request payload for registration.</summary>
 public class RegisterRequest
@@ -120,4 +120,4 @@ public class RegisterRequest
 }
 
 /// <summary>Registration response payload.</summary>
-public record RegisterResponse(int UserId, string Email, string Message);
+public record RegisterResponse(Guid UserId, string Email, string Message);

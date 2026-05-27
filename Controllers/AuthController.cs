@@ -1,122 +1,60 @@
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using asp_backend.Data;
 using asp_backend.models;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using asp_backend.models; // Aquí busca tu modelo User.cs
+using BCrypt.Net;
 
-
-namespace asp_backend.Controllers;
-
-/// <summary>
-/// Endpoints for authentication and user access.
-/// </summary>
-[ApiController]
-[Route("auth")]
-[Produces("application/json")]
-[Tags("Authentication")]
-public class AuthController : ControllerBase
+namespace asp_backend.Controllers
 {
-    private readonly AppDbContext _db;
-
-    public AuthController(AppDbContext db)
+    [ApiController]
+    [Route("api/[controller]")]
+    public class AuthController : ControllerBase
     {
-        _db = db;
-    }
+        private readonly AppDbContext _context;
 
-    /// <summary>
-    /// Authenticates a user with email and password.
-    /// </summary>
-    [HttpPost("login")]
-    [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Login([FromBody] LoginRequest request)
-    {
-        if (request == null)
-            return BadRequest(new { message = "Request body is required." });
-
-        var user = await _db.Users
-            .FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower());
-
-        if (user == null)
-            return Unauthorized(new { message = "Invalid credentials." });
-
-        var validPassword = BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash);
-        if (!validPassword)
-            return Unauthorized(new { message = "Invalid credentials." });
-
-        return Ok(new LoginResponse(user.Id, user.Email, "login ok"));
-    }
-
-    /// <summary>
-    /// Registers a new user account.
-    /// </summary>
-    [HttpPost("register")]
-    [ProducesResponseType(typeof(RegisterResponse), StatusCodes.Status201Created)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Register([FromBody] RegisterRequest request)
-    {
-        if (request == null)
-            return BadRequest(new { message = "Request body is required." });
-
-        if (string.IsNullOrWhiteSpace(request.FullName))
-            return BadRequest(new { message = "Full name is required." });
-
-        if (string.IsNullOrWhiteSpace(request.Email))
-            return BadRequest(new { message = "Email is required." });
-
-        if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 8)
-            return BadRequest(new { message = "Password must be at least 8 characters." });
-
-        if (request.Password != request.ConfirmPassword)
-            return BadRequest(new { message = "Passwords do not match." });
-
-        var emailExists = await _db.Users
-            .AnyAsync(u => u.Email.ToLower() == request.Email.ToLower());
-
-        if (emailExists)
-            return Conflict(new { message = "Email is already in use." });
-
-        var user = new User
+        public AuthController(AppDbContext context)
         {
-            Email = request.Email.ToLower(),
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-            FullName = request.FullName,
-            CreatedAt = DateTime.UtcNow
-        };
+            _context = context;
+        }
 
-        _db.Users.Add(user);
-        await _db.SaveChangesAsync();
+        [HttpPost("register")]
+        public async Task<IActionResult> Register([FromBody] RegisterRequest request)
+        {
+            // 1. Validación para que no llegue nada vacío
+            if (request == null || string.IsNullOrEmpty(request.Email) || string.IsNullOrEmpty(request.Password))
+            {
+                return BadRequest(new { Message = "Los datos de registro son inválidos." });
+            }
 
-        return CreatedAtAction(nameof(Register),
-            new RegisterResponse(user.Id, user.Email, "Account created successfully."));
+            // 2. Mapeo de datos usando PascalCase como lo tienes en tu User.cs
+            var user = new User()
+            {
+                FullName = request.FullName, // ¡Ahora sí existe en el Request!
+                Email = request.Email,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+                CreatedAt = DateTime.UtcNow,
+                
+                // Valores por defecto para que Postgres no chille por campos requeridos
+                Phone = "",
+                GoogleId = "",
+                ProfileImage = ""
+            };
+
+            // 3. Guardar en la base de datos
+            // Nota: Si 'Users' te sale en rojo, cámbialo por 'users' en minúscula
+            _context.Users.Add(user); 
+            await _context.SaveChangesAsync();
+
+            return Ok(new { Message = "Account created successfully." });
+        }
+    }
+
+    // CLASE CLAVE: Colocándola aquí nos aseguramos de que el controlador funcione al 100%
+    public class RegisterRequest
+    {
+        public string FullName { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string Password { get; set; } = "";
     }
 }
-
-/// <summary>Request payload for login.</summary>
-public class LoginRequest
-{
-    /// <summary>Email address.</summary>
-    public string Email { get; init; } = string.Empty;
-    /// <summary>Password.</summary>
-    public string Password { get; init; } = string.Empty;
-}
-
-/// <summary>Login response payload.</summary>
-public record LoginResponse(Guid UserId, string Email, string Message);
-
-/// <summary>Request payload for registration.</summary>
-public class RegisterRequest
-{
-    /// <summary>Email address.</summary>
-    public string Email { get; init; } = string.Empty;
-    /// <summary>Password (minimum 8 characters).</summary>
-    public string Password { get; init; } = string.Empty;
-    /// <summary>Confirm password.</summary>
-    public string ConfirmPassword { get; init; } = string.Empty;
-    /// <summary>Full name of the user.</summary>
-    public string FullName { get; init; } = string.Empty;
-}
-
-/// <summary>Registration response payload.</summary>
-public record RegisterResponse(Guid UserId, string Email, string Message);

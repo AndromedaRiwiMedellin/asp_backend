@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using asp_backend.models;
 using Microsoft.EntityFrameworkCore;
-using asp_backend.models;
 
 namespace asp_backend.Data;
 

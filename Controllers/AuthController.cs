@@ -1,8 +1,7 @@
-using asp_backend.Data;
-using asp_backend.models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using asp_backend.models; // Aquí busca tu modelo User.cs
+using asp_backend.models; 
+using asp_backend.Data;   
 using BCrypt.Net;
 
 namespace asp_backend.Controllers
@@ -18,42 +17,73 @@ namespace asp_backend.Controllers
             _context = context;
         }
 
+        // 1. MÉTODO DE REGISTRO (Ya funciona 10/10)
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterRequest request)
         {
-            // 1. Validación para que no llegue nada vacío
             if (request == null || string.IsNullOrEmpty(request.Email) || string.IsNullOrEmpty(request.Password))
             {
                 return BadRequest(new { Message = "Los datos de registro son inválidos." });
             }
 
-            // 2. Mapeo de datos usando PascalCase como lo tienes en tu User.cs
             var user = new User()
             {
-                FullName = request.FullName, // ¡Ahora sí existe en el Request!
+                FullName = request.FullName,
                 Email = request.Email,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-                CreatedAt = DateTime.UtcNow,
-                
-                // Valores por defecto para que Postgres no chille por campos requeridos
+                CreatedAt = DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified),
                 Phone = "",
                 GoogleId = "",
                 ProfileImage = ""
             };
 
-            // 3. Guardar en la base de datos
-            // Nota: Si 'Users' te sale en rojo, cámbialo por 'users' en minúscula
             _context.Users.Add(user); 
             await _context.SaveChangesAsync();
 
             return Ok(new { Message = "Account created successfully." });
         }
+
+        // 2. NUEVO MÉTODO: INICIO DE SESIÓN (Para solucionar el Error 404)
+        [HttpPost("login")]
+        public async Task<IActionResult> Login([FromBody] LoginRequest request)
+        {
+            if (request == null || string.IsNullOrEmpty(request.Email) || string.IsNullOrEmpty(request.Password))
+            {
+                return BadRequest(new { Message = "El correo y la contraseña son requeridos." });
+            }
+
+            // Buscamos el usuario en la base de datos por su email
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
+
+            // Si no existe o la contraseña encriptada no coincide, rechazamos el acceso
+            if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+            {
+                return Unauthorized(new { Message = "Credenciales inválidas. Verifica tu correo o contraseña." });
+            }
+
+            // Login exitoso: Devolvemos los datos del usuario (puedes expandir esto luego con un Token JWT)
+            return Ok(new { 
+                Message = "¡Inicio de sesión exitoso!", 
+                User = new {
+                    Id = user.Id,
+                    FullName = user.FullName,
+                    Email = user.Email
+                }
+            });
+        }
     }
 
-    // CLASE CLAVE: Colocándola aquí nos aseguramos de que el controlador funcione al 100%
+    // Estructura para capturar los datos de registro
     public class RegisterRequest
     {
         public string FullName { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string Password { get; set; } = "";
+    }
+
+    // NUEVA ESTRUCTURA: Para capturar los datos de inicio de sesión
+    public class LoginRequest
+    {
         public string Email { get; set; } = "";
         public string Password { get; set; } = "";
     }

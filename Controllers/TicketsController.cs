@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using asp_backend.Data;
 using asp_backend.models;
+using System.Diagnostics;
+using System.Text;
 
 namespace asp_backend.Controllers;
 
@@ -10,10 +12,12 @@ namespace asp_backend.Controllers;
 public class TicketsController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly string _printerName;
 
-    public TicketsController(AppDbContext db)
+    public TicketsController(AppDbContext db, IConfiguration config)
     {
         _db = db;
+        _printerName = config["Printer:Name"] ?? string.Empty;
     }
 
     [HttpPost("purchase-pos")]
@@ -32,6 +36,8 @@ public class TicketsController : ControllerBase
             {
                 Id = Guid.NewGuid(),
                 Email = request.Email,
+                FullName = request.FullName,
+                Phone = request.Phone,
                 CreatedAt = DateTime.Now
             };
             _db.Users.Add(user);
@@ -81,11 +87,126 @@ public class TicketsController : ControllerBase
 
         return Ok(new { message = "Purchase successful", tickets = purchasedTickets });
     }
+
+    [HttpGet("{id:guid}")]
+    public async Task<IActionResult> GetById(Guid id)
+    {
+        var ticket = await _db.Tickets
+            .Include(t => t.User)
+            .Include(t => t.Event)
+            .FirstOrDefaultAsync(t => t.Id == id);
+
+        if (ticket == null)
+            return NotFound(new { message = "Ticket not found." });
+
+        var response = new TicketPrintResponse(
+            Id:          ticket.Id.ToString(),
+            QrCode:      ticket.QrCode,
+            EventTitle:  ticket.Event?.Title ?? "—",
+            EventDate:   ticket.Event?.EventDate,
+            SeatNumber:  ticket.SeatNumber,
+            HolderName:  ticket.User?.FullName ?? ticket.User?.Email ?? "—",
+            PurchasedAt: ticket.PurchasedAt,
+            Status:      ticket.Status ?? "valid"
+        );
+
+        return Ok(response);
+    }
+
+    [HttpPost("{id:guid}/print")]
+    public async Task<IActionResult> PrintTicket(Guid id)
+    {
+        // Buscar ticket con sus relaciones
+        var ticket = await _db.Tickets
+            .Include(t => t.User)
+            .Include(t => t.Event)
+            .FirstOrDefaultAsync(t => t.Id == id);
+
+        if (ticket == null)
+            return NotFound(new { message = "Ticket not found." });
+
+        if (string.IsNullOrEmpty(_printerName))
+            return StatusCode(500, new { message = "Impresora no configurada en appsettings.json (Printer:Name)." });
+
+        // ── Formatear como texto para impresora térmica 58mm ──
+        var W = 32; // columnas a 58mm con font normal
+        var sep = new string('-', W);
+        var fmtDate = (DateTime? d) => d.HasValue
+            ? d.Value.ToString("dd/MM/yyyy HH:mm")
+            : "—";
+
+        var sb = new StringBuilder();
+        sb.AppendLine();
+        sb.AppendLine("ANDROMEDA".PadLeft((W + "ANDROMEDA".Length) / 2));
+        sb.AppendLine(sep);
+        sb.AppendLine((ticket.Event?.Title ?? "EVENTO").PadLeft((W + (ticket.Event?.Title?.Length ?? 6)) / 2));
+        sb.AppendLine(sep);
+        sb.AppendLine($"FECHA   : {fmtDate(ticket.Event?.EventDate)}");
+        if (!string.IsNullOrEmpty(ticket.SeatNumber))
+            sb.AppendLine($"ASIENTO : {ticket.SeatNumber}");
+        sb.AppendLine($"TITULAR : {ticket.User?.FullName ?? ticket.User?.Email ?? "—"}");
+        sb.AppendLine($"COMPRA  : {fmtDate(ticket.PurchasedAt)}");
+        sb.AppendLine(sep);
+        sb.AppendLine($"#{ticket.Id.ToString()[..8].ToUpper()}  [{ticket.Status?.ToUpper()}]");
+        sb.AppendLine();
+        sb.AppendLine();
+        sb.AppendLine();  // avance de papel
+
+        // ── Enviar a CUPS via lp ──
+        var args = string.IsNullOrEmpty(_printerName)
+            ? ""
+            : $"-d \"{_printerName}\"";
+
+        var psi = new ProcessStartInfo
+        {
+            FileName               = "lp",
+            Arguments              = args,
+            RedirectStandardInput  = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError  = true,
+            UseShellExecute        = false,
+            CreateNoWindow         = true
+        };
+
+        try
+        {
+            using var process = Process.Start(psi)!;
+            await process.StandardInput.WriteAsync(sb.ToString());
+            process.StandardInput.Close();
+
+            await process.WaitForExitAsync();
+
+            if (process.ExitCode != 0)
+            {
+                var err = await process.StandardError.ReadToEndAsync();
+                return StatusCode(500, new { message = $"Error al imprimir: {err.Trim()}" });
+            }
+
+            return Ok(new { message = "✓ Impresión enviada correctamente." });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = $"No se pudo ejecutar lp: {ex.Message}" });
+        }
+    }
 }
+
+public record TicketPrintResponse(
+    string Id,
+    string QrCode,
+    string EventTitle,
+    DateTime? EventDate,
+    string? SeatNumber,
+    string HolderName,
+    DateTime? PurchasedAt,
+    string Status
+);
 
 public class PosPurchaseRequest
 {
     public string Email { get; set; } = string.Empty;
+    public string? FullName { get; set; }
+    public string? Phone { get; set; }
     public Guid EventId { get; set; }
     public long AreaId { get; set; }
     public List<string> Seats { get; set; } = new();

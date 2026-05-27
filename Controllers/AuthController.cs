@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using asp_backend.Data;
 using asp_backend.models;
-using asp_backend.Models;
 
 namespace asp_backend.Controllers;
 
@@ -87,13 +86,49 @@ public class AuthController : ControllerBase
             Email = request.Email.ToLower(),
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
             FullName = request.FullName,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.Now
         };
 
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
 
         return CreatedAtAction(nameof(Register), new RegisterResponse(user.Id, user.Email, "Account created successfully."));
+    }
+
+    [HttpGet("check-email")]
+    public async Task<IActionResult> CheckEmail([FromQuery] string email)
+    {
+        if (string.IsNullOrWhiteSpace(email)) return BadRequest();
+        
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower());
+        if (user != null)
+        {
+            return Ok(new { exists = true, fullName = user.FullName });
+        }
+        return Ok(new { exists = false });
+    }
+
+    [HttpPost("seed")]
+    public async Task<IActionResult> Seed()
+    {
+        var users = new List<User>
+        {
+            new User { Id = Guid.NewGuid(), Email = "juan@correo.com", FullName = "Juan Perez", PasswordHash = BCrypt.Net.BCrypt.HashPassword("12345678"), CreatedAt = DateTime.Now },
+            new User { Id = Guid.NewGuid(), Email = "maria@correo.com", FullName = "Maria Gomez", PasswordHash = BCrypt.Net.BCrypt.HashPassword("12345678"), CreatedAt = DateTime.Now },
+            new User { Id = Guid.NewGuid(), Email = "carlos@correo.com", FullName = "Carlos Ruiz", PasswordHash = BCrypt.Net.BCrypt.HashPassword("12345678"), CreatedAt = DateTime.Now },
+            new User { Id = Guid.NewGuid(), Email = "ana@correo.com", FullName = "Ana Lopez", PasswordHash = BCrypt.Net.BCrypt.HashPassword("12345678"), CreatedAt = DateTime.Now }
+        };
+
+        foreach (var user in users)
+        {
+            if (!await _db.Users.AnyAsync(u => u.Email == user.Email))
+            {
+                _db.Users.Add(user);
+            }
+        }
+        await _db.SaveChangesAsync();
+
+        return Ok(new { message = "4 Users seeded successfully." });
     }
 }
 

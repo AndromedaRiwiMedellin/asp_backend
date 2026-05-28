@@ -1,8 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using asp_backend.models;
 using Microsoft.EntityFrameworkCore;
-using asp_backend.models;
+using asp_backend.Models; // <-- Asegúrate de que use la M mayúscula
 
 namespace asp_backend.Data;
 

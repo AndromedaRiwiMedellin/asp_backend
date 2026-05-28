@@ -30,7 +30,10 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
     {
-        policy.WithOrigins("http://localhost:5173")
+        policy.WithOrigins(
+                "http://localhost:5173",
+                "https://tickets.andromeda.andrescortes.dev"
+              )
               .AllowAnyHeader()
               .AllowAnyMethod();
     });

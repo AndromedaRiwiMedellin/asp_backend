@@ -11,6 +11,7 @@ builder.Services.AddControllers()
 
 
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddScoped<asp_backend.Services.IEmailService, asp_backend.Services.EmailService>();
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new()

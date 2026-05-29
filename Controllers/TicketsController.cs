@@ -4,6 +4,7 @@ using asp_backend.Data;
 using asp_backend.models;
 using System.Diagnostics;
 using System.Text;
+using asp_backend.Services;
 
 namespace asp_backend.Controllers;
 
@@ -13,11 +14,13 @@ public class TicketsController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly string _printerName;
+    private readonly IEmailService _emailService;
 
-    public TicketsController(AppDbContext db, IConfiguration config)
+    public TicketsController(AppDbContext db, IConfiguration config, IEmailService emailService)
     {
         _db = db;
         _printerName = config["Printer:Name"] ?? string.Empty;
+        _emailService = emailService;
     }
 
     [HttpGet("daily-sales")]
@@ -115,6 +118,24 @@ public class TicketsController : ControllerBase
         }
 
         await _db.SaveChangesAsync();
+
+        // Enviar correo a los clientes (de forma asíncrona pero sin bloquear la respuesta)
+        var eventDetails = await _db.Events.FirstOrDefaultAsync(e => e.Id == request.EventId);
+        var eventTitle = eventDetails?.Title ?? "Evento Orbix";
+        var eventDate = eventDetails?.EventDate;
+
+        foreach (var ticket in purchasedTickets)
+        {
+            _ = _emailService.SendTicketEmailAsync(
+                user.Email, 
+                user.FullName, 
+                eventTitle, 
+                eventDate, 
+                ticket.SeatNumber, 
+                ticket.QrCode, 
+                ticket.Id.ToString()
+            );
+        }
 
         return Ok(new { message = "Purchase successful", tickets = purchasedTickets });
     }

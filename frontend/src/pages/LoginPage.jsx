@@ -8,8 +8,8 @@ export function LoginPage() {
   const [searchParams] = useSearchParams();
   const { setSession } = useAuth();
 
-  const [email, setEmail] = useState("empleado@andromeda.com");
-  const [password, setPassword] = useState("Empleado123!");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 

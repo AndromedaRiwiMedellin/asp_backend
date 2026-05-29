@@ -24,16 +24,16 @@ public class TicketsController : ControllerBase
     }
 
     [HttpGet("daily-sales")]
-    public async Task<IActionResult> GetDailySales([FromQuery] Guid sellerId)
+    public async Task<IActionResult> GetDailySales([FromQuery] Guid sellerId, [FromQuery] DateTime? date = null)
     {
-        var today = DateTime.Today;
+        var targetDate = date?.Date ?? DateTime.Today;
         
         var salesData = await _db.Tickets
             .Include(t => t.Event)
             .Include(t => t.User)
             .Include(t => t.AreaSeats)
                 .ThenInclude(s => s.EventArea)
-            .Where(t => t.SellerId == sellerId && t.PurchasedAt >= today && t.PurchasedAt < today.AddDays(1))
+            .Where(t => t.SellerId == sellerId && t.PurchasedAt >= targetDate && t.PurchasedAt < targetDate.AddDays(1))
             .ToListAsync();
 
         var totalTickets = salesData.Count;

@@ -20,6 +20,36 @@ public class TicketsController : ControllerBase
         _printerName = config["Printer:Name"] ?? string.Empty;
     }
 
+    [HttpGet("daily-sales")]
+    public async Task<IActionResult> GetDailySales([FromQuery] Guid sellerId)
+    {
+        var today = DateTime.Today;
+        
+        var salesData = await _db.Tickets
+            .Include(t => t.Event)
+            .Include(t => t.User)
+            .Include(t => t.AreaSeats)
+                .ThenInclude(s => s.EventArea)
+            .Where(t => t.SellerId == sellerId && t.PurchasedAt >= today && t.PurchasedAt < today.AddDays(1))
+            .ToListAsync();
+
+        var totalTickets = salesData.Count;
+        var totalRevenue = salesData.Sum(t => t.AreaSeats.FirstOrDefault()?.EventArea?.Price ?? 0);
+
+        return Ok(new {
+            totalTickets,
+            totalRevenue,
+            activity = salesData.Select(t => new {
+                id = t.Id,
+                time = t.PurchasedAt,
+                seat = t.SeatNumber,
+                price = t.AreaSeats.FirstOrDefault()?.EventArea?.Price,
+                eventTitle = t.Event?.Title,
+                buyer = t.User?.FullName ?? t.User?.Email
+            }).OrderByDescending(t => t.time)
+        });
+    }
+
     [HttpPost("purchase-pos")]
     public async Task<IActionResult> PurchasePos([FromBody] PosPurchaseRequest request)
     {
@@ -66,6 +96,7 @@ public class TicketsController : ControllerBase
             {
                 Id = Guid.NewGuid(),
                 UserId = user.Id,
+                SellerId = request.SellerId,
                 EventId = request.EventId,
                 QrCode = Guid.NewGuid().ToString(),
                 SeatNumber = seat.SeatNumber,
@@ -210,4 +241,5 @@ public class PosPurchaseRequest
     public Guid EventId { get; set; }
     public long AreaId { get; set; }
     public List<string> Seats { get; set; } = new();
+    public Guid? SellerId { get; set; }
 }

@@ -8,6 +8,8 @@ builder.Services.AddControllers()
     {
         options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
     });
+
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -32,12 +34,19 @@ builder.Services.AddCors(options =>
     {
         policy.WithOrigins(
                 "http://localhost:5173",
-                "https://tickets.andromeda.andrescortes.dev"
+                "https://tickets.andromeda.andrescortes.dev",
+                "https://andromeda.andrescortes.dev"
               )
               .AllowAnyHeader()
               .AllowAnyMethod();
     });
 });
+builder.Services.AddAuthentication()
+    .AddGoogle(options =>
+    {
+        options.ClientId = builder.Configuration["Authentication:Google:ClientId"];
+    });
+
 
 var app = builder.Build();
 
@@ -49,6 +58,7 @@ app.UseSwaggerUI(options =>
 });
 
 app.UseCors("Frontend"); //  antes de MapControllers
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 

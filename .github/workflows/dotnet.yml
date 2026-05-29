@@ -67,4 +67,8 @@ jobs:
                 -p 8083:8080 \
                 -e ConnectionStrings__DefaultConnection="${{ secrets.DB_CONNECTION_STRING }}" \
                 -e Authentication__Google__ClientId="${{ secrets.GOOGLE_CLIENT_ID }}" \
+                -e Smtp__Host="${{ secrets.SMTP_HOST }}" \
+                -e Smtp__Port="${{ secrets.SMTP_PORT }}" \
+                -e Smtp__Username="${{ secrets.SMTP_USERNAME }}" \
+                -e Smtp__Password="${{ secrets.SMTP_PASSWORD }}" \
                 ${{ env.IMAGE }}:latest

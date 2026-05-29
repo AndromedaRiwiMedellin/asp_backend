@@ -22,12 +22,34 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Authenticates a user with email and password.
+    /// Authenticates a POS user.
     /// </summary>
+    [HttpPost("pos-login")]
+    public async Task<IActionResult> PosLogin([FromBody] LoginRequest request)
+    {
+        if (request == null)
+            return BadRequest(new { message = "Request body is required." });
+
+        var user = await _db.Users
+            .Include(u => u.Employees)
+                .ThenInclude(e => e.Permissions)
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower());
+
+        if (user == null)
+            return Unauthorized(new { message = "Invalid credentials" });
+
+        var validPassword = BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash);
+        if (!validPassword)
+            return Unauthorized(new { message = "Invalid credentials" });
+
+        var hasPermission = user.Employees.Any(e => e.Permissions.Any(p => p.Id == 1));
+        if (!hasPermission)
+            return Unauthorized(new { message = "No tienes permiso para acceder al POS." });
+
+        return Ok(new { userId = user.Id, email = user.Email, fullName = user.FullName, message = "Login POS ok" });
+    }
+
     [HttpPost("login")]
-    [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
         if (request == null)

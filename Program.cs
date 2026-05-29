@@ -32,6 +32,7 @@ builder.Services.AddCors(options =>
     {
         policy.WithOrigins(
                 "http://localhost:5173",
+                "http://localhost:5174",
                 "https://tickets.andromeda.andrescortes.dev"
               )
               .AllowAnyHeader()
@@ -41,6 +42,15 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    try {
+        db.Database.ExecuteSqlRaw("ALTER TABLE tickets ADD COLUMN IF NOT EXISTS seller_id uuid;");
+        db.Database.ExecuteSqlRaw("ALTER TABLE tickets DROP CONSTRAINT IF EXISTS tickets_seller_id_fkey;");
+        db.Database.ExecuteSqlRaw("ALTER TABLE tickets ADD CONSTRAINT tickets_seller_id_fkey FOREIGN KEY (seller_id) REFERENCES users(id);");
+    } catch { }
+}
 app.UseSwagger();
 app.UseSwaggerUI(options =>
 {

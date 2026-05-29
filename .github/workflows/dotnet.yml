@@ -65,4 +65,6 @@ jobs:
               docker rm ${{ github.event.repository.name }} || true
               docker run -d --name ${{ github.event.repository.name }} \
                 -p 8083:8080 \
+                -e ConnectionStrings__DefaultConnection="${{ secrets.DB_CONNECTION_STRING }}" \
+                -e Authentication__Google__ClientId="${{ secrets.GOOGLE_CLIENT_ID }}" \
                 ${{ env.IMAGE }}:latest

@@ -8,6 +8,8 @@ builder.Services.AddControllers()
     {
         options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
     });
+
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -32,14 +34,13 @@ builder.Services.AddCors(options =>
     {
         policy.WithOrigins(
                 "http://localhost:5173",
-                "http://localhost:5174",
-                "https://tickets.andromeda.andrescortes.dev"
+                "https://tickets.andromeda.andrescortes.dev",
+                "https://andromeda.andrescortes.dev"
               )
               .AllowAnyHeader()
               .AllowAnyMethod();
     });
 });
-
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())

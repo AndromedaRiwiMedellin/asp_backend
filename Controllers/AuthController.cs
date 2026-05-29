@@ -39,6 +39,8 @@ public class AuthController : ControllerBase
         var user = await _db.Users
             .Include(u => u.Employees)
             .ThenInclude(e => e.Role)
+            .Include(u => u.Employees)
+            .ThenInclude(e => e.Permissions)
             .FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower());
 
         if (user == null || string.IsNullOrWhiteSpace(user.PasswordHash))
@@ -54,6 +56,15 @@ public class AuthController : ControllerBase
 
         var employee = user.Employees.FirstOrDefault(e => e.Active == true);
         var role = employee?.Role?.Name ?? "user";
+
+        if (role.Equals("employee", StringComparison.OrdinalIgnoreCase))
+        {
+            var permissions = employee?.Permissions.Select(p => p.Name?.ToLowerInvariant()).ToList() ?? new List<string?>();
+            if (!permissions.Contains("tickets") || !permissions.Contains("seguridad"))
+            {
+                return Unauthorized(new { message = "El empleado no cuenta con los permisos requeridos (tickets y seguridad)." });
+            }
+        }
 
         var token = GenerateToken(user, role, employee?.Id);
         var expiresAt = DateTime.UtcNow.AddHours(8);

@@ -65,7 +65,11 @@ public class TicketsController : ControllerBase
 
         if (session.ActiveEvent != null)
         {
-            scansQuery = scansQuery.Where(s => s.Ticket != null && s.Ticket.EventId == session.ActiveEvent.EventId);
+            scansQuery = scansQuery.Where(s => 
+                s.Ticket == null || 
+                s.Ticket.EventId == session.ActiveEvent.EventId || 
+                s.Reason == "WRONG_EVENT"
+            );
         }
 
         var scans = await scansQuery

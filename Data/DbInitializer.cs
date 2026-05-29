@@ -49,12 +49,18 @@ public static class DbInitializer
         db.Users.AddRange(employeeUser, attendeeOne, attendeeTwo);
         await db.SaveChangesAsync();
 
+        var ticketsPermission = new Permission { Name = "tickets" };
+        var securityPermission = new Permission { Name = "seguridad" };
+        db.Permissions.AddRange(ticketsPermission, securityPermission);
+        await db.SaveChangesAsync();
+
         var employee = new Employee
         {
             UserId = employeeUser.Id,
             RoleId = employeeRole.Id,
             Active = true,
-            CreatedAt = now
+            CreatedAt = now,
+            Permissions = new List<Permission> { ticketsPermission, securityPermission }
         };
 
         db.Employees.Add(employee);

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { getDashboard, getScanEvents } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { ScannerPage } from "./ScannerPage";
@@ -14,13 +15,27 @@ function StatCard({ label, value }) {
 
 export function DashboardPage() {
   const { token, user, logout } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const getInitialEventId = () => {
+    const urlEventId = searchParams.get("eventId");
+    if (urlEventId) return urlEventId;
+
+    const storedActive = localStorage.getItem("activeEventId");
+    if (storedActive) return storedActive;
+
+    const storedSelected = localStorage.getItem("selectedEventId");
+    if (storedSelected) return storedSelected;
+
+    return user?.activeEvent?.eventId ?? "";
+  };
 
   const [tab, setTab] = useState("dashboard");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [dashboard, setDashboard] = useState(null);
   const [events, setEvents] = useState([]);
-  const [selectedEventId, setSelectedEventId] = useState(user?.activeEvent?.eventId ?? "");
+  const [selectedEventId, setSelectedEventId] = useState(getInitialEventId());
 
   const fullName = useMemo(() => user?.fullName ?? "Usuario", [user]);
 
@@ -30,7 +45,7 @@ export function DashboardPage() {
       setEvents(items);
 
       if (!selectedEventId && items.length > 0) {
-        const fallbackEventId = user?.activeEvent?.eventId ?? items[0].eventId;
+        const fallbackEventId = items[0].eventId;
         setSelectedEventId(fallbackEventId);
       }
     } catch (err) {
@@ -55,6 +70,17 @@ export function DashboardPage() {
   useEffect(() => {
     loadEvents();
   }, []);
+
+  useEffect(() => {
+    if (selectedEventId) {
+      localStorage.setItem("activeEventId", selectedEventId);
+      localStorage.setItem("selectedEventId", selectedEventId);
+      setSearchParams((prev) => {
+        prev.set("eventId", selectedEventId);
+        return prev;
+      }, { replace: true });
+    }
+  }, [selectedEventId]);
 
   useEffect(() => {
     if (tab === "dashboard") {

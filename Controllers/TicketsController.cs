@@ -126,7 +126,7 @@ public class TicketsController : ControllerBase
 
         foreach (var ticket in purchasedTickets)
         {
-            _ = _emailService.SendTicketEmailAsync(
+            await _emailService.SendTicketEmailAsync(
                 user.Email, 
                 user.FullName, 
                 eventTitle, 

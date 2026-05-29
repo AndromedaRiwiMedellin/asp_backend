@@ -25,14 +25,19 @@ public class EmailService : IEmailService
     {
         try
         {
+            _logger.LogInformation("Iniciando envío de correo a {Email} para el evento {EventTitle}", toEmail, eventTitle);
+            
             var smtpHost = _config["Smtp:Host"];
             var smtpPortString = _config["Smtp:Port"];
             var smtpUser = _config["Smtp:Username"];
             var smtpPass = _config["Smtp:Password"];
 
+            _logger.LogInformation("SMTP Config cargada: Host={Host}, Port={Port}, User={User}, HasPassword={HasPass}", 
+                smtpHost, smtpPortString, smtpUser, !string.IsNullOrEmpty(smtpPass));
+
             if (string.IsNullOrEmpty(smtpHost) || string.IsNullOrEmpty(smtpPortString))
             {
-                _logger.LogWarning("SMTP no está configurado. Saltando envío de correo de boleta a {Email}", toEmail);
+                _logger.LogWarning("SMTP no está configurado (Host o Port vacíos). Saltando envío de correo de boleta a {Email}", toEmail);
                 return;
             }
 

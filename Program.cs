@@ -60,6 +60,7 @@ app.UseSwaggerUI(options =>
     options.DisplayRequestDuration();
 });
 
+app.UseStaticFiles(); // Serve poster images from wwwroot/
 app.UseCors("Frontend"); //  antes de MapControllers
 app.UseAuthorization();
 app.MapControllers();

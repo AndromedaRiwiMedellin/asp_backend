@@ -24,9 +24,17 @@ public class TicketsController : ControllerBase
     }
 
     [HttpGet("daily-sales")]
-    public async Task<IActionResult> GetDailySales([FromQuery] Guid sellerId, [FromQuery] DateTime? date = null)
+    public async Task<IActionResult> GetDailySales([FromQuery] Guid sellerId, [FromQuery] string? date = null)
     {
-        var targetDate = date?.Date ?? DateTime.Today;
+        DateTime targetDate;
+        if (!string.IsNullOrEmpty(date) && DateTime.TryParse(date, null, System.Globalization.DateTimeStyles.RoundtripKind, out var parsedDate))
+        {
+            targetDate = parsedDate.ToLocalTime().Date;
+        }
+        else
+        {
+            targetDate = DateTime.Today;
+        }
         
         var salesData = await _db.Tickets
             .Include(t => t.Event)

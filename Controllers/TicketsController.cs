@@ -124,9 +124,11 @@ public class TicketsController : ControllerBase
         var eventTitle = eventDetails?.Title ?? "Evento Orbix";
         var eventDate = eventDetails?.EventDate;
 
+        var emailErrors = new List<string>();
+
         foreach (var ticket in purchasedTickets)
         {
-            await _emailService.SendTicketEmailAsync(
+            var emailError = await _emailService.SendTicketEmailAsync(
                 user.Email, 
                 user.FullName, 
                 eventTitle, 
@@ -135,9 +137,18 @@ public class TicketsController : ControllerBase
                 ticket.QrCode, 
                 ticket.Id.ToString()
             );
+
+            if (emailError != null)
+            {
+                emailErrors.Add(emailError);
+            }
         }
 
-        return Ok(new { message = "Purchase successful", tickets = purchasedTickets });
+        return Ok(new { 
+            message = "Purchase successful", 
+            tickets = purchasedTickets,
+            emailErrors = emailErrors.Any() ? emailErrors : null
+        });
     }
 
     [HttpGet("{id:guid}")]

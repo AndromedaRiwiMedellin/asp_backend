@@ -7,7 +7,7 @@ namespace asp_backend.Services;
 
 public interface IEmailService
 {
-    Task SendTicketEmailAsync(string toEmail, string customerName, string eventTitle, DateTime? eventDate, string seatNumber, string qrCode, string ticketId);
+    Task<string?> SendTicketEmailAsync(string toEmail, string customerName, string eventTitle, DateTime? eventDate, string seatNumber, string qrCode, string ticketId);
 }
 
 public class EmailService : IEmailService
@@ -21,7 +21,7 @@ public class EmailService : IEmailService
         _logger = logger;
     }
 
-    public async Task SendTicketEmailAsync(string toEmail, string customerName, string eventTitle, DateTime? eventDate, string seatNumber, string qrCode, string ticketId)
+    public async Task<string?> SendTicketEmailAsync(string toEmail, string customerName, string eventTitle, DateTime? eventDate, string seatNumber, string qrCode, string ticketId)
     {
         try
         {
@@ -38,7 +38,7 @@ public class EmailService : IEmailService
             if (string.IsNullOrEmpty(smtpHost) || string.IsNullOrEmpty(smtpPortString))
             {
                 _logger.LogWarning("SMTP no está configurado (Host o Port vacíos). Saltando envío de correo de boleta a {Email}", toEmail);
-                return;
+                return "SMTP credentials not configured on the server.";
             }
 
             int smtpPort = int.Parse(smtpPortString);
@@ -90,10 +90,12 @@ public class EmailService : IEmailService
             await client.DisconnectAsync(true);
             
             _logger.LogInformation("Correo enviado exitosamente a {Email}", toEmail);
+            return null; // Null means success
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error al enviar correo de boleta a {Email}", toEmail);
+            return ex.Message;
         }
     }
 }

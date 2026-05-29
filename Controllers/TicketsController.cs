@@ -53,42 +53,67 @@ public class TicketsController : ControllerBase
     [HttpPost("purchase-pos")]
     public async Task<IActionResult> PurchasePos([FromBody] PosPurchaseRequest request)
     {
-        if (request == null || string.IsNullOrEmpty(request.Email) || request.Seats == null || !request.Seats.Any())
+        if (request == null || string.IsNullOrWhiteSpace(request.Email) || request.Seats == null || !request.Seats.Any())
         {
             return BadRequest(new { message = "Invalid request." });
         }
 
-        // Buscar o crear usuario
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
+        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+        var requestedSeats = request.Seats
+            .Where(seat => !string.IsNullOrWhiteSpace(seat))
+            .Select(seat => seat.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (requestedSeats.Count == 0)
+        {
+            return BadRequest(new { message = "At least one seat is required." });
+        }
+
+        var eventExists = await _db.Events.AnyAsync(e => e.Id == request.EventId);
+        if (!eventExists)
+        {
+            return NotFound(new { message = "Event not found." });
+        }
+
+        var areaExists = await _db.EventAreas.AnyAsync(a => a.Id == request.AreaId && a.EventId == request.EventId);
+        if (!areaExists)
+        {
+            return BadRequest(new { message = "Area does not belong to the selected event." });
+        }
+
+        await using var transaction = await _db.Database.BeginTransactionAsync();
+
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail);
         if (user == null)
         {
             user = new User
             {
                 Id = Guid.NewGuid(),
-                Email = request.Email,
-                FullName = request.FullName,
+                Email = normalizedEmail,
+                FullName = string.IsNullOrWhiteSpace(request.FullName) ? normalizedEmail : request.FullName.Trim(),
                 Phone = request.Phone,
-                CreatedAt = DateTime.Now
+                CreatedAt = DbNow()
             };
             _db.Users.Add(user);
         }
 
-        // Buscar asientos
         var seats = await _db.AreaSeats
-            .Where(s => request.Seats.Contains(s.SeatNumber) && s.EventAreaId == request.AreaId)
+            .Where(s => requestedSeats.Contains(s.SeatNumber) && s.EventAreaId == request.AreaId)
             .ToListAsync();
 
-        if (seats.Count != request.Seats.Count)
+        if (seats.Count != requestedSeats.Count)
         {
             return BadRequest(new { message = "Some seats do not exist." });
         }
 
-        if (seats.Any(s => s.Status == "sold"))
+        if (seats.Any(s => !string.Equals(s.Status, "available", StringComparison.OrdinalIgnoreCase)))
         {
-            return Conflict(new { message = "Some seats are already sold." });
+            return Conflict(new { message = "Some seats are already unavailable." });
         }
 
         var purchasedTickets = new List<Ticket>();
+        var purchasedAt = DbNow();
 
         foreach (var seat in seats)
         {
@@ -101,7 +126,7 @@ public class TicketsController : ControllerBase
                 QrCode = Guid.NewGuid().ToString(),
                 SeatNumber = seat.SeatNumber,
                 Status = "valid",
-                PurchasedAt = DateTime.Now
+                PurchasedAt = purchasedAt
             };
 
             _db.Tickets.Add(ticket);
@@ -110,13 +135,86 @@ public class TicketsController : ControllerBase
             seat.Status = "sold";
             seat.UserId = user.Id;
             seat.TicketId = ticket.Id;
-            seat.SoldAt = DateTime.Now;
-            seat.UpdatedAt = DateTime.Now;
+            seat.SoldAt = purchasedAt;
+            seat.UpdatedAt = purchasedAt;
         }
 
         await _db.SaveChangesAsync();
+        await transaction.CommitAsync();
 
-        return Ok(new { message = "Purchase successful", tickets = purchasedTickets });
+        return Ok(new PosPurchaseResponse(
+            "Purchase successful",
+            purchasedTickets.Select(ticket => new PurchasedTicketResponse(
+                ticket.Id,
+                ticket.QrCode,
+                ticket.SeatNumber,
+                ticket.Status,
+                ticket.PurchasedAt
+            )).ToList()
+        ));
+    }
+
+    [HttpGet("purchases")]
+    public async Task<IActionResult> GetPurchases([FromQuery] string email)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return BadRequest(new { message = "Email is required." });
+        }
+
+        var normalizedEmail = email.Trim().ToLowerInvariant();
+        var tickets = await _db.Tickets
+            .AsNoTracking()
+            .Include(ticket => ticket.User)
+            .Include(ticket => ticket.Event)
+            .Include(ticket => ticket.AreaSeats)
+                .ThenInclude(seat => seat.EventArea)
+            .Where(ticket => ticket.User != null && ticket.User.Email.ToLower() == normalizedEmail)
+            .OrderByDescending(ticket => ticket.PurchasedAt)
+            .ToListAsync();
+
+        var purchases = tickets
+            .GroupBy(ticket => new
+            {
+                ticket.EventId,
+                PurchasedAt = ticket.PurchasedAt?.ToString("O") ?? string.Empty
+            })
+            .Select(group =>
+            {
+                var firstTicket = group.First();
+                var eventArea = firstTicket.AreaSeats.FirstOrDefault()?.EventArea;
+                var ticketItems = group
+                    .Select(ticket => new PurchasedTicketResponse(
+                        ticket.Id,
+                        ticket.QrCode,
+                        ticket.SeatNumber,
+                        ticket.Status,
+                        ticket.PurchasedAt
+                    ))
+                    .ToList();
+
+                return new PurchaseHistoryResponse(
+                    Id: $"{firstTicket.EventId}-{group.Key.PurchasedAt}",
+                    Event: new PurchaseEventResponse(
+                        firstTicket.Event?.Id,
+                        firstTicket.Event?.Title ?? "Evento OrbiX",
+                        firstTicket.Event?.EventDate,
+                        firstTicket.Event?.PosterUrl
+                    ),
+                    Zone: new PurchaseZoneResponse(
+                        eventArea?.Id,
+                        eventArea?.AreaName ?? "Zona",
+                        eventArea?.Price ?? 0
+                    ),
+                    Tickets: ticketItems,
+                    Total: ticketItems.Count * (eventArea?.Price ?? 0),
+                    Status: "Pagado",
+                    PurchasedAt: firstTicket.PurchasedAt
+                );
+            })
+            .ToList();
+
+        return Ok(purchases);
     }
 
     [HttpGet("{id:guid}")]
@@ -220,6 +318,8 @@ public class TicketsController : ControllerBase
             return StatusCode(500, new { message = $"No se pudo ejecutar lp: {ex.Message}" });
         }
     }
+
+    private static DateTime DbNow() => DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
 }
 
 public record TicketPrintResponse(
@@ -243,3 +343,36 @@ public class PosPurchaseRequest
     public List<string> Seats { get; set; } = new();
     public Guid? SellerId { get; set; }
 }
+
+public record PosPurchaseResponse(string Message, List<PurchasedTicketResponse> Tickets);
+
+public record PurchasedTicketResponse(
+    Guid Id,
+    string QrCode,
+    string? SeatNumber,
+    string? Status,
+    DateTime? PurchasedAt
+);
+
+public record PurchaseHistoryResponse(
+    string Id,
+    PurchaseEventResponse Event,
+    PurchaseZoneResponse Zone,
+    List<PurchasedTicketResponse> Tickets,
+    decimal Total,
+    string Status,
+    DateTime? PurchasedAt
+);
+
+public record PurchaseEventResponse(
+    Guid? Id,
+    string Title,
+    DateTime? EventDate,
+    string? Image
+);
+
+public record PurchaseZoneResponse(
+    long? Id,
+    string Name,
+    decimal Price
+);

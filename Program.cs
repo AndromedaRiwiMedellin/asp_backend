@@ -41,14 +41,6 @@ builder.Services.AddCors(options =>
               .AllowAnyMethod();
     });
 });
-builder.Services.AddAuthentication()
-    .AddGoogle(options =>
-    {
-        options.ClientId = builder.Configuration["Authentication:Google:ClientId"];
-        options.ClientSecret = "NotRequiredForFrontendAuth";
-    });
-
-
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
@@ -68,7 +60,6 @@ app.UseSwaggerUI(options =>
 });
 
 app.UseCors("Frontend"); //  antes de MapControllers
-app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 

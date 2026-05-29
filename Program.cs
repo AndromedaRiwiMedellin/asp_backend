@@ -45,6 +45,7 @@ builder.Services.AddAuthentication()
     .AddGoogle(options =>
     {
         options.ClientId = builder.Configuration["Authentication:Google:ClientId"];
+        options.ClientSecret = "NotRequiredForFrontendAuth";
     });
 
 

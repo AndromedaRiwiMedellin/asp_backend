@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace asp_backend.models;
@@ -19,6 +19,8 @@ public partial class Ticket
 
     public DateTime? PurchasedAt { get; set; }
 
+    public Guid? SellerId { get; set; }
+
     public virtual ICollection<AreaSeat> AreaSeats { get; set; } = new List<AreaSeat>();
 
     public virtual Event? Event { get; set; }
@@ -26,4 +28,6 @@ public partial class Ticket
     public virtual ICollection<TicketScan> TicketScans { get; set; } = new List<TicketScan>();
 
     public virtual User? User { get; set; }
+    
+    public virtual User? Seller { get; set; }
 }

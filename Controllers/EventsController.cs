@@ -101,7 +101,7 @@ public class EventsController : ControllerBase
         foreach (var seat in seats)
         {
             seat.Status = "reserved";
-            seat.ReservedAt = DateTime.Now;
+            seat.ReservedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
         }
 
         await _db.SaveChangesAsync();

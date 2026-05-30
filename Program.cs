@@ -6,8 +6,15 @@ using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+    });
+
+
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddScoped<asp_backend.Services.IEmailService, asp_backend.Services.EmailService>();
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new()

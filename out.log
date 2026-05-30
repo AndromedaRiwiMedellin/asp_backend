@@ -1,0 +1,44 @@
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://localhost:5000
+info: Microsoft.Hosting.Lifetime[0]
+      Application started. Press Ctrl+C to shut down.
+info: Microsoft.Hosting.Lifetime[0]
+      Hosting environment: Production
+info: Microsoft.Hosting.Lifetime[0]
+      Content root path: /home/quinto/Documents/andromeda-events/asp_backend
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (280ms) [Parameters=[@user_Email='?'], CommandType='Text', CommandTimeout='30']
+      SELECT EXISTS (
+          SELECT 1
+          FROM users AS u
+          WHERE u.email = @user_Email)
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (225ms) [Parameters=[@user_Email='?'], CommandType='Text', CommandTimeout='30']
+      SELECT EXISTS (
+          SELECT 1
+          FROM users AS u
+          WHERE u.email = @user_Email)
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (301ms) [Parameters=[@user_Email='?'], CommandType='Text', CommandTimeout='30']
+      SELECT EXISTS (
+          SELECT 1
+          FROM users AS u
+          WHERE u.email = @user_Email)
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (205ms) [Parameters=[@user_Email='?'], CommandType='Text', CommandTimeout='30']
+      SELECT EXISTS (
+          SELECT 1
+          FROM users AS u
+          WHERE u.email = @user_Email)
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (272ms) [Parameters=[@p0='?' (DbType = Guid), @p1='?' (DbType = DateTime2), @p2='?', @p3='?', @p4='?', @p5='?', @p6='?', @p7='?', @p8='?' (DbType = Guid), @p9='?' (DbType = DateTime2), @p10='?', @p11='?', @p12='?', @p13='?', @p14='?', @p15='?', @p16='?' (DbType = Guid), @p17='?' (DbType = DateTime2), @p18='?', @p19='?', @p20='?', @p21='?', @p22='?', @p23='?', @p24='?' (DbType = Guid), @p25='?' (DbType = DateTime2), @p26='?', @p27='?', @p28='?', @p29='?', @p30='?', @p31='?'], CommandType='Text', CommandTimeout='30']
+      INSERT INTO users (id, created_at, email, full_name, google_id, password_hash, phone, profile_image)
+      VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7);
+      INSERT INTO users (id, created_at, email, full_name, google_id, password_hash, phone, profile_image)
+      VALUES (@p8, @p9, @p10, @p11, @p12, @p13, @p14, @p15);
+      INSERT INTO users (id, created_at, email, full_name, google_id, password_hash, phone, profile_image)
+      VALUES (@p16, @p17, @p18, @p19, @p20, @p21, @p22, @p23);
+      INSERT INTO users (id, created_at, email, full_name, google_id, password_hash, phone, profile_image)
+      VALUES (@p24, @p25, @p26, @p27, @p28, @p29, @p30, @p31);
+info: Microsoft.Hosting.Lifetime[0]
+      Application is shutting down...

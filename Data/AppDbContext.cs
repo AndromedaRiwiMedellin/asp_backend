@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using asp_backend.models;
 using Microsoft.EntityFrameworkCore;
@@ -434,6 +434,7 @@ public partial class AppDbContext : DbContext
                 .HasDefaultValueSql("'VALID'::character varying")
                 .HasColumnName("status");
             entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.SellerId).HasColumnName("seller_id");
 
             entity.HasOne(d => d.Event).WithMany(p => p.Tickets)
                 .HasForeignKey(d => d.EventId)
@@ -442,6 +443,10 @@ public partial class AppDbContext : DbContext
             entity.HasOne(d => d.User).WithMany(p => p.Tickets)
                 .HasForeignKey(d => d.UserId)
                 .HasConstraintName("tickets_user_id_fkey");
+
+            entity.HasOne(d => d.Seller).WithMany()
+                .HasForeignKey(d => d.SellerId)
+                .HasConstraintName("tickets_seller_id_fkey");
         });
 
         modelBuilder.Entity<TicketScan>(entity =>

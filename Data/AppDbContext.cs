@@ -461,6 +461,7 @@ public partial class AppDbContext : DbContext
                 .HasDefaultValueSql("uuid_generate_v4()")
                 .HasColumnName("id");
             entity.Property(e => e.Reason).HasColumnName("reason");
+            entity.Property(e => e.ScannedCode).HasColumnName("scanned_code");
             entity.Property(e => e.ScannedAt)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone")

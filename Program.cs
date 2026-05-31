@@ -33,7 +33,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-    ?? ["http://localhost:3000", "http://localhost:5173"];
+    ?? ["http://localhost:3000", "http://localhost:5174", "http://localhost:5173"];
 
 builder.Services.AddCors(options =>
 {
@@ -78,6 +78,7 @@ for (var attempt = 1; attempt <= maxRetries; attempt++)
         using var scope = app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await db.Database.EnsureCreatedAsync();
+        await db.Database.ExecuteSqlRawAsync("ALTER TABLE ticket_scans ADD COLUMN IF NOT EXISTS scanned_code text;");
         await DbInitializer.SeedAsync(db);
         break;
     }

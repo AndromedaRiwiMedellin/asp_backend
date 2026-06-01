@@ -7,7 +7,9 @@ public static class DbInitializer
 {
     private const int SeatsPerArea = 400;
     private const int SeatsPerRow = 20;
-    private const decimal DefaultTicketPrice = 120000m;
+    private const decimal BaseGeneralPrice = 80000m;
+    private const decimal EventPriceStep = 15000m;
+    private const decimal VipPricePremium = 70000m;
 
     public static async Task SeedAsync(AppDbContext db)
     {
@@ -176,6 +178,8 @@ public static class DbInitializer
     {
         var events = await db.Events
             .Include(ev => ev.EventAreas)
+            .OrderBy(ev => ev.EventDate ?? ev.CreatedAt ?? DateTime.MaxValue)
+            .ThenBy(ev => ev.Title)
             .ToListAsync();
 
         if (events.Count == 0)
@@ -183,30 +187,47 @@ public static class DbInitializer
             return;
         }
 
-        foreach (var ev in events)
+        for (var eventIndex = 0; eventIndex < events.Count; eventIndex++)
         {
-            if (!ev.EventAreas.Any())
+            var ev = events[eventIndex];
+            var areas = ev.EventAreas.ToList();
+            var generalArea = areas.FirstOrDefault(IsGeneralArea)
+                ?? areas.FirstOrDefault(area => !IsVipArea(area));
+            var vipArea = areas.FirstOrDefault(IsVipArea);
+
+            if (generalArea == null)
             {
-                var area = new EventArea
+                generalArea = new EventArea
                 {
                     EventId = ev.Id,
-                    AreaName = "General",
-                    Description = "Zona principal",
-                    Price = DefaultTicketPrice,
-                    Capacity = SeatsPerArea,
                     CreatedAt = now,
                     UpdatedAt = now
                 };
-
-                db.EventAreas.Add(area);
-                ev.EventAreas.Add(area);
+                db.EventAreas.Add(generalArea);
+                ev.EventAreas.Add(generalArea);
             }
+
+            if (vipArea == null)
+            {
+                vipArea = new EventArea
+                {
+                    EventId = ev.Id,
+                    CreatedAt = now,
+                    UpdatedAt = now
+                };
+                db.EventAreas.Add(vipArea);
+                ev.EventAreas.Add(vipArea);
+            }
+
+            ConfigureArea(generalArea, "General", "Zona general", GetGeneralPrice(eventIndex), now);
+            ConfigureArea(vipArea, "VIP", "Zona VIP", GetVipPrice(eventIndex), now);
         }
 
         await db.SaveChangesAsync();
 
-        foreach (var ev in events)
+        for (var eventIndex = 0; eventIndex < events.Count; eventIndex++)
         {
+            var ev = events[eventIndex];
             var areas = await db.EventAreas
                 .Include(area => area.AreaSeats)
                 .Where(area => area.EventId == ev.Id)
@@ -214,12 +235,14 @@ public static class DbInitializer
 
             foreach (var area in areas)
             {
-                area.Price = DefaultTicketPrice;
-                area.Capacity = SeatsPerArea;
-                area.Description = string.IsNullOrWhiteSpace(area.Description)
-                    ? "Zona principal"
-                    : area.Description;
-                area.UpdatedAt = now;
+                var isVip = IsVipArea(area);
+                ConfigureArea(
+                    area,
+                    isVip ? "VIP" : "General",
+                    isVip ? "Zona VIP" : "Zona general",
+                    isVip ? GetVipPrice(eventIndex) : GetGeneralPrice(eventIndex),
+                    now
+                );
 
                 EnsureSeatsForArea(db, area, now);
             }
@@ -238,6 +261,35 @@ public static class DbInitializer
         }
 
         await db.SaveChangesAsync();
+    }
+
+    private static void ConfigureArea(EventArea area, string name, string description, decimal price, DateTime now)
+    {
+        area.AreaName = name;
+        area.Description = description;
+        area.Price = price;
+        area.Capacity = SeatsPerArea;
+        area.UpdatedAt = now;
+    }
+
+    private static decimal GetGeneralPrice(int eventIndex)
+    {
+        return BaseGeneralPrice + eventIndex * EventPriceStep;
+    }
+
+    private static decimal GetVipPrice(int eventIndex)
+    {
+        return GetGeneralPrice(eventIndex) + VipPricePremium;
+    }
+
+    private static bool IsVipArea(EventArea area)
+    {
+        return area.AreaName.Contains("vip", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsGeneralArea(EventArea area)
+    {
+        return area.AreaName.Contains("general", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void EnsureSeatsForArea(AppDbContext db, EventArea area, DateTime now)

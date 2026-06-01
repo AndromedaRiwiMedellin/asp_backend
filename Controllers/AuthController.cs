@@ -26,7 +26,18 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("login")]
-    public async Task<IActionResult> Login([FromBody] LoginRequest request)
+    public Task<IActionResult> Login([FromBody] LoginRequest request)
+    {
+        return ProcessLogin(request, false);
+    }
+
+    [HttpPost("pos-login")]
+    public Task<IActionResult> PosLogin([FromBody] LoginRequest request)
+    {
+        return ProcessLogin(request, true);
+    }
+
+    private async Task<IActionResult> ProcessLogin(LoginRequest request, bool isPos)
     {
         if (request == null || string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
         {
@@ -35,7 +46,9 @@ public class AuthController : ControllerBase
     
         var user = await _db.Users
             .Include(u => u.Employees)
-            .ThenInclude(e => e.Role)
+                .ThenInclude(e => e.Role)
+            .Include(u => u.Employees)
+                .ThenInclude(e => e.Permissions)
             .FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower());
     
         if (user == null || string.IsNullOrWhiteSpace(user.PasswordHash))
@@ -80,6 +93,20 @@ public class AuthController : ControllerBase
         }
     
         var employee = user.Employees.FirstOrDefault(e => e.Active == true);
+
+        if (isPos)
+        {
+            if (employee == null)
+            {
+                return Unauthorized(new { message = "Access denied: Solo los empleados activos pueden acceder al POS." });
+            }
+
+            if (!employee.Permissions.Any(p => p.Id == 1))
+            {
+                return Unauthorized(new { message = "Access denied: No tienes los permisos necesarios para acceder al POS." });
+            }
+        }
+
         var role = employee != null
             ? employee.Role?.Name ?? "employee"
             : "user";
@@ -99,12 +126,6 @@ public class AuthController : ControllerBase
             activeEvent,
             "login ok"
         ));
-    }
-
-    [HttpPost("pos-login")]
-    public Task<IActionResult> PosLogin([FromBody] LoginRequest request)
-    {
-        return Login(request);
     }
 
     [HttpGet("check-email")]

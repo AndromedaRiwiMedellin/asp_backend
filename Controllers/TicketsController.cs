@@ -5,6 +5,7 @@ using asp_backend.models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using asp_backend.Services;
 
 namespace asp_backend.Controllers;
 
@@ -17,10 +18,12 @@ namespace asp_backend.Controllers;
 public class TicketsController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly IEmailService _emailService;
 
-    public TicketsController(AppDbContext db)
+    public TicketsController(AppDbContext db, IEmailService emailService)
     {
         _db = db;
+        _emailService = emailService;
     }
 
     [HttpGet("{id:guid}")]
@@ -184,6 +187,19 @@ public class TicketsController : ControllerBase
         }
 
         await _db.SaveChangesAsync();
+
+        foreach (var ticket in createdTickets)
+        {
+            await _emailService.SendTicketEmailAsync(
+                request.Email,
+                request.FullName ?? request.Email,
+                ev.Title,
+                ev.EventDate,
+                ticket.SeatNumber ?? "",
+                ticket.QrCode ?? "",
+                ticket.Id.ToString()
+            );
+        }
 
         return Ok(new PurchasePosResponse(
             createdTickets.Select(ToTicketItemResponse).ToList(),

@@ -17,6 +17,8 @@ public partial class TicketScan
 
     public string? Reason { get; set; }
 
+    public string? ScannedCode { get; set; }
+
     public virtual Employee? ScannedByNavigation { get; set; }
 
     public virtual Ticket? Ticket { get; set; }

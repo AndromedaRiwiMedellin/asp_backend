@@ -12,7 +12,8 @@ namespace asp_backend.Controllers;
 [Route("tickets")]
 [Produces("application/json")]
 [Tags("Tickets")]
-[Authorize(Roles = "employee,admin,superadmin")]
+[Authorize]
+// [Authorize(Roles = "employee,admin,superadmin")]
 public class TicketsController : ControllerBase
 {
     private readonly AppDbContext _db;
@@ -41,14 +42,6 @@ public class TicketsController : ControllerBase
     {
         var employeeId = await ResolveEmployeeIdAsync();
         var session = await BuildSessionContextAsync(eventId, employeeId);
-        if (IsReadOnlyRole(session.Role))
-        {
-            return Ok(new EmployeeDashboardResponse(
-                new EmployeeDashboardStats(0, 0, 0, 0, 0),
-                [],
-                session
-            ));
-        }
 
         var scansQuery = _db.TicketScans
             .AsNoTracking()
@@ -91,7 +84,7 @@ public class TicketsController : ControllerBase
                 scan.ScannedAt,
                 scan.Success == true,
                 NormalizeReason(scan.Reason),
-                ticket?.QrCode,
+                scan.ScannedCode ?? ticket?.QrCode,
                 ticket?.Status,
                 ticket?.User?.FullName ?? ticket?.User?.Email,
                 ticket?.User?.Email,
@@ -112,7 +105,7 @@ public class TicketsController : ControllerBase
             session
         ));
     }
-
+   
     [HttpPost("scan")]
     [ProducesResponseType(typeof(TicketScanResultResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -122,27 +115,17 @@ public class TicketsController : ControllerBase
         {
             return BadRequest(new { message = "qrCode is required." });
         }
-
+    
         var employeeId = await ResolveEmployeeIdAsync();
         var session = await BuildSessionContextAsync(request.EventId, employeeId);
-        if (IsReadOnlyRole(session.Role))
-        {
-            return Ok(new TicketScanResultResponse(
-                false,
-                "Rol superadmin en modo lectura. Sin escaneo por ahora.",
-                "READ_ONLY_ROLE",
-                null,
-                session
-            ));
-        }
-
+    
         var qrCode = request.QrCode.Trim();
-
+    
         var ticket = await _db.Tickets
             .Include(t => t.User)
             .Include(t => t.Event)
             .FirstOrDefaultAsync(t => t.QrCode == qrCode);
-
+    
         if (ticket == null)
         {
             var unknownScan = new TicketScan
@@ -150,12 +133,13 @@ public class TicketsController : ControllerBase
                 ScannedBy = employeeId,
                 Success = false,
                 Reason = "NOT_FOUND",
+                ScannedCode = qrCode,
                 ScannedAt = DbTimeNow()
             };
-
+    
             _db.TicketScans.Add(unknownScan);
             await _db.SaveChangesAsync();
-
+    
             return Ok(new TicketScanResultResponse(
                 false,
                 "Ticket no existe. Posible fraude.",
@@ -164,7 +148,7 @@ public class TicketsController : ControllerBase
                 session
             ));
         }
-
+    
         if (session.ActiveEvent != null && ticket.EventId != session.ActiveEvent.EventId)
         {
             var wrongEventScan = new TicketScan
@@ -173,12 +157,13 @@ public class TicketsController : ControllerBase
                 ScannedBy = employeeId,
                 Success = false,
                 Reason = "WRONG_EVENT",
+                ScannedCode = qrCode,
                 ScannedAt = DbTimeNow()
             };
-
+    
             _db.TicketScans.Add(wrongEventScan);
             await _db.SaveChangesAsync();
-
+    
             return Ok(new TicketScanResultResponse(
                 false,
                 "El ticket pertenece a otro evento.",
@@ -195,12 +180,12 @@ public class TicketsController : ControllerBase
                 session
             ));
         }
-
+    
         var normalizedStatus = (ticket.Status ?? "VALID").ToUpperInvariant();
         var success = false;
         var reason = "INVALID";
         var message = "Ticket inválido.";
-
+    
         if (normalizedStatus == "VALID")
         {
             success = true;
@@ -228,19 +213,20 @@ public class TicketsController : ControllerBase
             reason = normalizedStatus;
             message = $"Ticket no autorizado: {normalizedStatus}.";
         }
-
+    
         var scan = new TicketScan
         {
             TicketId = ticket.Id,
             ScannedBy = employeeId,
             Success = success,
             Reason = reason,
+            ScannedCode = qrCode,
             ScannedAt = DbTimeNow()
         };
-
+    
         _db.TicketScans.Add(scan);
         await _db.SaveChangesAsync();
-
+    
         return Ok(new TicketScanResultResponse(
             success,
             message,
@@ -257,7 +243,7 @@ public class TicketsController : ControllerBase
             session
         ));
     }
-
+    
     private async Task<Guid?> ResolveEmployeeIdAsync()
     {
         var employeeClaim = User.FindFirstValue("employeeId");
@@ -281,7 +267,9 @@ public class TicketsController : ControllerBase
     private async Task<ScannerSession> BuildSessionContextAsync(Guid? requestedEventId, Guid? employeeId)
     {
         var role = User.FindFirstValue(ClaimTypes.Role) ?? "user";
-        var userEmail = User.FindFirstValue(JwtRegisteredClaimNames.Email) ?? "unknown";
+        var userEmail = User.FindFirstValue(JwtRegisteredClaimNames.Email)
+            ?? User.FindFirstValue(ClaimTypes.Email)
+            ?? "unknown";
         var activeEvent = await ResolveActiveEventAsync(requestedEventId);
 
         return new ScannerSession(userEmail, role, employeeId, activeEvent);
@@ -347,10 +335,6 @@ public class TicketsController : ControllerBase
         return DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
     }
 
-    private static bool IsReadOnlyRole(string role)
-    {
-        return role.Equals("superadmin", StringComparison.OrdinalIgnoreCase);
-    }
 }
 
 public class ScanTicketRequest

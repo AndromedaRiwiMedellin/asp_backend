@@ -26,41 +26,68 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("login")]
-    [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
         if (request == null || string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
         {
             return BadRequest(new { message = "Email and password are required." });
         }
-
+    
         var user = await _db.Users
             .Include(u => u.Employees)
             .ThenInclude(e => e.Role)
             .FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower());
-
+    
         if (user == null || string.IsNullOrWhiteSpace(user.PasswordHash))
         {
             return Unauthorized(new { message = "Invalid credentials" });
         }
+    
+        // var validPassword = BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash);
+        // if (!validPassword)
+        // {
+        //     return Unauthorized(new { message = "Invalid credentials" });
+        // }
+        bool validPassword = false;
 
-        var validPassword = BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash);
-        if (!validPassword)
+        try
         {
-            return Unauthorized(new { message = "Invalid credentials" });
+            if (!string.IsNullOrWhiteSpace(user.PasswordHash) &&
+                user.PasswordHash.StartsWith("$2"))
+            {
+                validPassword = BCrypt.Net.BCrypt.Verify(
+                    request.Password,
+                    user.PasswordHash
+                );
+            }
+            else
+            {
+                // Temporal: contraseña guardada en texto plano
+                validPassword = request.Password == user.PasswordHash;
+            }
+        }
+        catch
+        {
+            validPassword = request.Password == user.PasswordHash;
         }
 
+        if (!validPassword)
+        {
+            return Unauthorized(new
+            {
+                message = "Invalid credentials"
+            });
+        }
+    
         var employee = user.Employees.FirstOrDefault(e => e.Active == true);
         var role = employee != null
             ? employee.Role?.Name ?? "employee"
             : "user";
-
+    
         var token = GenerateToken(user, role, employee?.Id);
         var expiresAt = DateTime.UtcNow.AddHours(8);
         var activeEvent = await ResolveActiveEventAsync();
-
+    
         return Ok(new LoginResponse(
             token,
             expiresAt,

@@ -5,12 +5,17 @@ namespace asp_backend.Data;
 
 public static class DbInitializer
 {
+    private const int SeatsPerArea = 400;
+    private const int SeatsPerRow = 20;
+    private const decimal DefaultTicketPrice = 120000m;
+
     public static async Task SeedAsync(AppDbContext db)
     {
         var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
         var hadUsers = await db.Users.AnyAsync();
 
         await EnsureOperationalAdminAsync(db, now);
+        await EnsureEventInventoryAsync(db, now);
 
         if (hadUsers)
         {
@@ -163,6 +168,115 @@ public static class DbInitializer
         );
 
         await db.SaveChangesAsync();
+
+        await EnsureEventInventoryAsync(db, now);
+    }
+
+    private static async Task EnsureEventInventoryAsync(AppDbContext db, DateTime now)
+    {
+        var events = await db.Events
+            .Include(ev => ev.EventAreas)
+            .ToListAsync();
+
+        if (events.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var ev in events)
+        {
+            if (!ev.EventAreas.Any())
+            {
+                var area = new EventArea
+                {
+                    EventId = ev.Id,
+                    AreaName = "General",
+                    Description = "Zona principal",
+                    Price = DefaultTicketPrice,
+                    Capacity = SeatsPerArea,
+                    CreatedAt = now,
+                    UpdatedAt = now
+                };
+
+                db.EventAreas.Add(area);
+                ev.EventAreas.Add(area);
+            }
+        }
+
+        await db.SaveChangesAsync();
+
+        foreach (var ev in events)
+        {
+            var areas = await db.EventAreas
+                .Include(area => area.AreaSeats)
+                .Where(area => area.EventId == ev.Id)
+                .ToListAsync();
+
+            foreach (var area in areas)
+            {
+                area.Price = DefaultTicketPrice;
+                area.Capacity = SeatsPerArea;
+                area.Description = string.IsNullOrWhiteSpace(area.Description)
+                    ? "Zona principal"
+                    : area.Description;
+                area.UpdatedAt = now;
+
+                EnsureSeatsForArea(db, area, now);
+            }
+
+            ev.TotalCapacity = areas.Count * SeatsPerArea;
+
+            if (!ev.SaleStart.HasValue || ev.SaleStart.Value > now)
+            {
+                ev.SaleStart = now.AddDays(-30);
+            }
+
+            if (!ev.SaleEnd.HasValue || ev.SaleEnd.Value < now)
+            {
+                ev.SaleEnd = now.AddDays(30);
+            }
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    private static void EnsureSeatsForArea(AppDbContext db, EventArea area, DateTime now)
+    {
+        var existingSeats = area.AreaSeats
+            .GroupBy(seat => seat.SeatNumber, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+        for (var index = 0; index < SeatsPerArea; index++)
+        {
+            var row = ((char)('A' + (index / SeatsPerRow))).ToString();
+            var number = (index % SeatsPerRow) + 1;
+            var seatNumber = $"{row}{number}";
+
+            if (existingSeats.TryGetValue(seatNumber, out var seat))
+            {
+                seat.RowLabel = row;
+                seat.UpdatedAt = now;
+
+                if (!seat.TicketId.HasValue && !seat.UserId.HasValue)
+                {
+                    seat.Status = "available";
+                    seat.ReservedAt = null;
+                    seat.SoldAt = null;
+                }
+
+                continue;
+            }
+
+            db.AreaSeats.Add(new AreaSeat
+            {
+                EventAreaId = area.Id,
+                SeatNumber = seatNumber,
+                RowLabel = row,
+                Status = "available",
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+        }
     }
 
     private static async Task EnsureOperationalAdminAsync(AppDbContext db, DateTime now)

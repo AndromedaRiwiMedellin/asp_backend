@@ -101,6 +101,35 @@ public class AuthController : ControllerBase
         ));
     }
 
+    [HttpPost("pos-login")]
+    public Task<IActionResult> PosLogin([FromBody] LoginRequest request)
+    {
+        return Login(request);
+    }
+
+    [HttpGet("check-email")]
+    [ProducesResponseType(typeof(CheckEmailResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> CheckEmail([FromQuery] string email)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return BadRequest(new { message = "Email is required." });
+        }
+
+        var user = await _db.Users
+            .AsNoTracking()
+            .Where(u => u.Email.ToLower() == email.ToLower())
+            .Select(u => new { u.Id, u.Email, u.FullName, u.Phone })
+            .FirstOrDefaultAsync();
+
+        if (user == null)
+        {
+            return Ok(new CheckEmailResponse(false, null, null, null, null));
+        }
+
+        return Ok(new CheckEmailResponse(true, user.Id, user.Email, user.FullName, user.Phone));
+    }
+
     [HttpGet("me")]
     [Authorize]
     [ProducesResponseType(typeof(CurrentUserResponse), StatusCodes.Status200OK)]
@@ -272,6 +301,8 @@ public class RegisterRequest
 }
 
 public record RegisterResponse(Guid UserId, string Email, string Message);
+
+public record CheckEmailResponse(bool Exists, Guid? UserId, string? Email, string? FullName, string? Phone);
 
 public record CurrentUserResponse(
     Guid UserId,

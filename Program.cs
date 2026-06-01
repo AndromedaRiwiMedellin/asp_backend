@@ -33,7 +33,15 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-    ?? ["http://localhost:3000", "http://localhost:5174", "http://localhost:5173"];
+    ?? [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "https://andromeda.andrescortes.dev",
+        "https://admin.andromeda.andrescortes.dev",
+        "https://tickets.andromeda.andrescortes.dev",
+        "https://access.andromeda.andrescortes.dev"
+    ];
 
 builder.Services.AddCors(options =>
 {

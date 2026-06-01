@@ -15,6 +15,9 @@ namespace asp_backend.Controllers;
 [Tags("Events")]
 public class EventsController : ControllerBase
 {
+    private const int SeatsPerPublicArea = 200;
+    private const int SeatsPerRow = 20;
+
     private readonly AppDbContext _db;
 
     public EventsController(AppDbContext db)
@@ -30,11 +33,39 @@ public class EventsController : ControllerBase
     /// </remarks>
     /// <response code="200">A collection of events.</response>
     [HttpGet]
-    [ProducesResponseType(typeof(List<Event>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(List<EventSummaryResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll()
     {
-        var events = await _db.Events.ToListAsync();
-        return Ok(events);
+        var events = await _db.Events
+            .AsNoTracking()
+            .OrderBy(e => e.EventDate ?? e.CreatedAt ?? DateTime.MaxValue)
+            .ThenBy(e => e.Title)
+            .ToListAsync();
+        var eventIds = events.Select(e => e.Id).ToList();
+        var areas = await _db.EventAreas
+            .AsNoTracking()
+            .Where(area => eventIds.Contains(area.EventId))
+            .OrderBy(area => area.EventId)
+            .ThenByDescending(area => area.AreaName == "VIP")
+            .ThenBy(area => area.AreaName)
+            .Select(area => new EventAreaSummaryResponse(
+                area.Id,
+                area.EventId,
+                area.AreaName,
+                area.Price,
+                area.Capacity,
+                area.Description
+            ))
+            .ToListAsync();
+
+        var response = events
+            .Select(ev => new EventSummaryResponse(
+                ev,
+                areas.Where(area => area.EventId == ev.Id).ToList()
+            ))
+            .ToList();
+
+        return Ok(response);
     }
 
     /// <summary>
@@ -49,6 +80,7 @@ public class EventsController : ControllerBase
     public async Task<IActionResult> GetById(Guid id)
     {
         var ev = await _db.Events
+            .AsNoTracking()
             .FirstOrDefaultAsync(e => e.Id == id);
 
         if (ev == null)
@@ -57,11 +89,62 @@ public class EventsController : ControllerBase
         }
 
         var areas = await _db.EventAreas
+            .AsNoTracking()
             .Include(a => a.AreaSeats)
             .Where(a => a.EventId == id)
+            .OrderByDescending(a => a.AreaName == "VIP")
+            .ThenBy(a => a.AreaName)
             .ToListAsync();
 
+        foreach (var area in areas)
+        {
+            var visibleSeats = area.AreaSeats
+                .Where(IsPublicSeat)
+                .OrderBy(seat => seat.RowLabel)
+                .ThenBy(GetSeatNumberValue)
+                .ToList();
+
+            area.AreaSeats.Clear();
+            foreach (var seat in visibleSeats)
+            {
+                area.AreaSeats.Add(seat);
+            }
+        }
+
         return Ok(new EventDetailsResponse(ev, areas));
+    }
+
+    private static bool IsPublicSeat(AreaSeat seat)
+    {
+        if (string.IsNullOrWhiteSpace(seat.SeatNumber))
+        {
+            return false;
+        }
+
+        var row = char.ToUpperInvariant(seat.SeatNumber[0]);
+        if (row < 'A' || row >= 'A' + SeatsPerPublicArea / SeatsPerRow)
+        {
+            return false;
+        }
+
+        return TryGetPublicSeatNumber(seat.SeatNumber, out var number) && number is >= 1 and <= SeatsPerRow;
+    }
+
+    private static int GetSeatNumberValue(AreaSeat seat)
+    {
+        return TryGetPublicSeatNumber(seat.SeatNumber, out var value) ? value : 0;
+    }
+
+    private static bool TryGetPublicSeatNumber(string seatNumber, out int value)
+    {
+        value = 0;
+        if (seatNumber.Length < 2)
+        {
+            return false;
+        }
+
+        var suffix = seatNumber[1..];
+        return suffix.All(char.IsDigit) && int.TryParse(suffix, out value);
     }
 
     /// <summary>
@@ -163,6 +246,16 @@ public class LockSeatsRequest
 /// Event payload returned when fetching one event.
 /// </summary>
 public record EventDetailsResponse(Event Event, List<EventArea> Areas);
+
+/// <summary>
+/// Event summary payload used by listings without loading every seat.
+/// </summary>
+public record EventSummaryResponse(Event Event, List<EventAreaSummaryResponse> Areas);
+
+/// <summary>
+/// Event area summary without seat rows.
+/// </summary>
+public record EventAreaSummaryResponse(long Id, Guid EventId, string AreaName, decimal Price, int Capacity, string? Description);
 
 /// <summary>
 /// Response returned after successfully reserving seats.

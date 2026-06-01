@@ -5,7 +5,7 @@ namespace asp_backend.Data;
 
 public static class DbInitializer
 {
-    private const int SeatsPerArea = 400;
+    private const int SeatsPerArea = 200;
     private const int SeatsPerRow = 20;
     private const decimal BaseGeneralPrice = 80000m;
     private const decimal EventPriceStep = 15000m;
@@ -297,12 +297,14 @@ public static class DbInitializer
         var existingSeats = area.AreaSeats
             .GroupBy(seat => seat.SeatNumber, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+        var expectedSeatNumbers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         for (var index = 0; index < SeatsPerArea; index++)
         {
             var row = ((char)('A' + (index / SeatsPerRow))).ToString();
             var number = (index % SeatsPerRow) + 1;
             var seatNumber = $"{row}{number}";
+            expectedSeatNumbers.Add(seatNumber);
 
             if (existingSeats.TryGetValue(seatNumber, out var seat))
             {
@@ -328,6 +330,17 @@ public static class DbInitializer
                 CreatedAt = now,
                 UpdatedAt = now
             });
+        }
+
+        var extraSeats = area.AreaSeats
+            .Where(seat => !expectedSeatNumbers.Contains(seat.SeatNumber)
+                && !seat.TicketId.HasValue
+                && !seat.UserId.HasValue)
+            .ToList();
+
+        if (extraSeats.Count > 0)
+        {
+            db.AreaSeats.RemoveRange(extraSeats);
         }
     }
 

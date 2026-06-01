@@ -108,6 +108,52 @@ public class AuthController : ControllerBase
         ));
     }
 
+    [HttpPut("update-profile")]
+[Authorize]
+[ProducesResponseType(StatusCodes.Status200OK)]
+[ProducesResponseType(StatusCodes.Status400BadRequest)]
+[ProducesResponseType(StatusCodes.Status401Unauthorized)]
+public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequest request)
+{
+    if (request == null || string.IsNullOrWhiteSpace(request.FullName))
+    {
+        return BadRequest(new { message = "El nombre completo es requerido." });
+    }
+
+    // 1. Obtener el ID del usuario desde el Token JWT de la sesión activa
+    var userIdClaim = User.FindFirstValue(JwtRegisteredClaimNames.Sub);
+    if (!Guid.TryParse(userIdClaim, out var userId))
+    {
+        return Unauthorized(new { message = "Token inválido." });
+    }
+
+    // 2. Buscar al usuario en PostgreSQL
+    var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId);
+    if (user == null)
+    {
+        return NotFound(new { message = "Usuario no encontrado." });
+    }
+
+    // 3. Modificar los campos permitidos
+    user.FullName = request.FullName;
+    user.Phone = request.Phone; // Asegúrate de que tu entidad 'User' tenga esta propiedad
+
+    // 4. Guardar cambios en la base de datos
+    await _db.SaveChangesAsync();
+
+    // 5. [Opcional] Si estás usando Redis para la sesión, aquí puedes meter la lógica 
+    // para borrar la llave vieja o actualizarla, evitando que muestre datos desactualizados.
+
+    return Ok(new { message = "Perfil actualizado correctamente.", fullName = user.FullName, phone = user.Phone });
+}
+
+// Agrega este DTO al final del archivo junto a los otros Requests
+public class UpdateProfileRequest
+{
+    public string FullName { get; init; } = string.Empty;
+    public string? Phone { get; init; } = string.Empty;
+}
+
     [HttpPost("register")]
     [ProducesResponseType(typeof(RegisterResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]

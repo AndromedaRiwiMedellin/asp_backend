@@ -7,20 +7,17 @@ public static class DbInitializer
 {
     public static async Task SeedAsync(AppDbContext db)
     {
-        if (await db.Users.AnyAsync())
+        var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+        var hadUsers = await db.Users.AnyAsync();
+
+        await EnsureOperationalAdminAsync(db, now);
+
+        if (hadUsers)
         {
             return;
         }
 
-        var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
-
-        var employeeRole = new Role
-        {
-            Id = 1,
-            Name = "employee"
-        };
-
-        db.Roles.Add(employeeRole);
+        var employeeRole = await db.Roles.FirstAsync(role => role.Name == "employee");
 
         var employeeUser = new User
         {
@@ -49,10 +46,8 @@ public static class DbInitializer
         db.Users.AddRange(employeeUser, attendeeOne, attendeeTwo);
         await db.SaveChangesAsync();
 
-        var ticketsPermission = new Permission { Name = "tickets" };
-        var securityPermission = new Permission { Name = "seguridad" };
-        db.Permissions.AddRange(ticketsPermission, securityPermission);
-        await db.SaveChangesAsync();
+        var ticketsPermission = await db.Permissions.FirstAsync(permission => permission.Name == "tickets");
+        var securityPermission = await db.Permissions.FirstAsync(permission => permission.Name == "seguridad");
 
         var employee = new Employee
         {
@@ -168,5 +163,94 @@ public static class DbInitializer
         );
 
         await db.SaveChangesAsync();
+    }
+
+    private static async Task EnsureOperationalAdminAsync(AppDbContext db, DateTime now)
+    {
+        var adminRole = await EnsureRoleAsync(db, "admin");
+        await EnsureRoleAsync(db, "employee");
+        await EnsureRoleAsync(db, "superadmin");
+
+        var ticketsPermission = await EnsurePermissionAsync(db, "tickets");
+        var securityPermission = await EnsurePermissionAsync(db, "seguridad");
+
+        var adminUser = await db.Users
+            .FirstOrDefaultAsync(user => user.Email.ToLower() == "admin@boletas.com");
+
+        if (adminUser == null)
+        {
+            adminUser = new User
+            {
+                Email = "admin@boletas.com",
+                FullName = "Administrador OrbiX",
+                CreatedAt = now
+            };
+            db.Users.Add(adminUser);
+        }
+
+        adminUser.PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin123");
+        adminUser.FullName = string.IsNullOrWhiteSpace(adminUser.FullName)
+            ? "Administrador OrbiX"
+            : adminUser.FullName;
+
+        await db.SaveChangesAsync();
+
+        var adminEmployee = await db.Employees
+            .Include(employee => employee.Permissions)
+            .FirstOrDefaultAsync(employee => employee.UserId == adminUser.Id);
+
+        if (adminEmployee == null)
+        {
+            adminEmployee = new Employee
+            {
+                UserId = adminUser.Id,
+                CreatedAt = now,
+                Permissions = new List<Permission>()
+            };
+            db.Employees.Add(adminEmployee);
+        }
+
+        adminEmployee.RoleId = adminRole.Id;
+        adminEmployee.Active = true;
+
+        if (!adminEmployee.Permissions.Any(permission => permission.Id == ticketsPermission.Id))
+        {
+            adminEmployee.Permissions.Add(ticketsPermission);
+        }
+
+        if (!adminEmployee.Permissions.Any(permission => permission.Id == securityPermission.Id))
+        {
+            adminEmployee.Permissions.Add(securityPermission);
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task<Role> EnsureRoleAsync(AppDbContext db, string name)
+    {
+        var role = await db.Roles.FirstOrDefaultAsync(item => item.Name == name);
+        if (role != null)
+        {
+            return role;
+        }
+
+        role = new Role { Name = name };
+        db.Roles.Add(role);
+        await db.SaveChangesAsync();
+        return role;
+    }
+
+    private static async Task<Permission> EnsurePermissionAsync(AppDbContext db, string name)
+    {
+        var permission = await db.Permissions.FirstOrDefaultAsync(item => item.Name == name);
+        if (permission != null)
+        {
+            return permission;
+        }
+
+        permission = new Permission { Name = name };
+        db.Permissions.Add(permission);
+        await db.SaveChangesAsync();
+        return permission;
     }
 }

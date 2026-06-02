@@ -8,6 +8,7 @@ namespace asp_backend.Services;
 public interface IEmailService
 {
     Task<string?> SendTicketEmailAsync(string toEmail, string customerName, string eventTitle, DateTime? eventDate, string seatNumber, string qrCode, string ticketId);
+    Task<string?> SendWelcomeEmailAsync(string toEmail, string customerName, string temporaryPassword);
 }
 
 public class EmailService : IEmailService
@@ -95,6 +96,69 @@ public class EmailService : IEmailService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error al enviar correo de boleta a {Email}", toEmail);
+            return ex.Message;
+        }
+    }
+
+    public async Task<string?> SendWelcomeEmailAsync(string toEmail, string customerName, string temporaryPassword)
+    {
+        try
+        {
+            var smtpHost = _config["Smtp:Host"];
+            var smtpPortString = _config["Smtp:Port"];
+            var smtpUser = _config["Smtp:Username"];
+            var smtpPass = _config["Smtp:Password"];
+
+            if (string.IsNullOrEmpty(smtpHost) || string.IsNullOrEmpty(smtpPortString))
+            {
+                _logger.LogWarning("SMTP no configurado. No se envió correo de bienvenida a {Email}", toEmail);
+                return "SMTP credentials not configured on the server.";
+            }
+
+            int smtpPort = int.Parse(smtpPortString);
+
+            var message = new MimeMessage();
+            message.From.Add(new MailboxAddress("Orbix Events", smtpUser));
+            message.To.Add(new MailboxAddress(customerName, toEmail));
+            message.Subject = "¡Bienvenido a Orbix! Tu cuenta ha sido creada";
+
+            var builder = new BodyBuilder();
+            builder.HtmlBody = $@"
+            <div style=""font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 10px; overflow: hidden;"">
+                <div style=""background-color: #0a192f; color: #64ffda; padding: 20px; text-align: center;"">
+                    <h1 style=""margin: 0; font-size: 24px;"">Orbix Events</h1>
+                </div>
+                <div style=""padding: 30px; background-color: #ffffff; color: #333;"">
+                    <h2 style=""color: #0a192f; margin-top: 0;"">¡Hola {customerName}!</h2>
+                    <p>Tu cuenta ha sido creada en Orbix Events. Ya puedes acceder a tu perfil para ver el historial de tus boletas.</p>
+
+                    <div style=""background-color: #f0fdfa; border-left: 4px solid #14b8a6; padding: 15px; margin: 20px 0; border-radius: 4px;"">
+                        <p style=""margin: 0 0 8px;""><strong>Correo:</strong> {toEmail}</p>
+                        <p style=""margin: 0;""><strong>Contraseña temporal:</strong> <span style=""font-size: 18px; font-weight: bold; color: #0f766e; letter-spacing: 2px;"">{temporaryPassword}</span></p>
+                    </div>
+
+                    <p style=""color: #e11d48; font-size: 13px;"">⚠️ Por seguridad, te recomendamos cambiar tu contraseña al ingresar por primera vez.</p>
+                </div>
+                <div style=""background-color: #f8f9fa; padding: 15px; text-align: center; color: #888; font-size: 12px;"">
+                    <p style=""margin: 0;"">Este es un correo automático. Por favor no respondas a esta dirección.</p>
+                    <p style=""margin: 5px 0 0;"">&copy; {DateTime.Now.Year} Orbix Events. Todos los derechos reservados.</p>
+                </div>
+            </div>";
+
+            message.Body = builder.ToMessageBody();
+
+            using var client = new SmtpClient();
+            await client.ConnectAsync(smtpHost, smtpPort, MailKit.Security.SecureSocketOptions.StartTls);
+            await client.AuthenticateAsync(smtpUser, smtpPass);
+            await client.SendAsync(message);
+            await client.DisconnectAsync(true);
+
+            _logger.LogInformation("Correo de bienvenida enviado a {Email}", toEmail);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al enviar correo de bienvenida a {Email}", toEmail);
             return ex.Message;
         }
     }

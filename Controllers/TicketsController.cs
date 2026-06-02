@@ -159,7 +159,7 @@ public class TicketsController : ControllerBase
             return Conflict(new { message = "One or more seats are not available." });
         }
 
-        var user = await FindOrCreateCustomerAsync(request.Email, request.FullName, request.Phone);
+        var (user, isNewUser, tempPassword) = await FindOrCreateCustomerAsync(request.Email, request.FullName, request.Phone);
         var now = DbTimeNow();
         var createdTickets = new List<Ticket>();
 
@@ -187,6 +187,16 @@ public class TicketsController : ControllerBase
         }
 
         await _db.SaveChangesAsync();
+
+        // Send welcome email only if the account was just created
+        if (isNewUser && !string.IsNullOrWhiteSpace(tempPassword))
+        {
+            await _emailService.SendWelcomeEmailAsync(
+                request.Email,
+                request.FullName ?? request.Email,
+                tempPassword
+            );
+        }
 
         foreach (var ticket in createdTickets)
         {
@@ -565,37 +575,36 @@ public class TicketsController : ControllerBase
         return DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
     }
 
-    private async Task<User> FindOrCreateCustomerAsync(string email, string? fullName, string? phone)
+    private async Task<(User user, bool isNew, string? tempPassword)> FindOrCreateCustomerAsync(string email, string? fullName, string? phone)
     {
         var normalizedEmail = email.Trim().ToLowerInvariant();
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail);
         if (user != null)
         {
             if (!string.IsNullOrWhiteSpace(fullName) && string.IsNullOrWhiteSpace(user.FullName))
-            {
                 user.FullName = fullName.Trim();
-            }
 
             if (!string.IsNullOrWhiteSpace(phone) && string.IsNullOrWhiteSpace(user.Phone))
-            {
                 user.Phone = phone.Trim();
-            }
 
-            return user;
+            return (user, false, null);
         }
+
+        // Generate a human-readable temporary password: Orbix + 6 digits
+        var tempPassword = $"Orbix{Random.Shared.Next(100000, 999999)}";
 
         user = new User
         {
             Email = normalizedEmail,
             FullName = string.IsNullOrWhiteSpace(fullName) ? normalizedEmail : fullName.Trim(),
             Phone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim(),
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString("N")),
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(tempPassword),
             CreatedAt = DbTimeNow()
         };
 
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
-        return user;
+        return (user, true, tempPassword);
     }
 
     private async Task<Dictionary<Guid, EventArea>> BuildAreaLookupAsync(IEnumerable<Guid> ticketIds)
